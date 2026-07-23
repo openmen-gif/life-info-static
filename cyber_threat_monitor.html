@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>전 지구 실시간 사이버 위협 관측 · Global Cyber Threat Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --abyss:#05070d;
+    --panel:rgba(11,16,26,.72);
+    --panel-solid:#0b101a;
+    --line:rgba(255,80,80,.14);
+    --line-strong:rgba(255,80,80,.32);
+    --accent:#ff4d5e;
+    --txt:#e8eef5;
+    --muted:#6b7a8d;
+    --muted2:#43505f;
+    --ok:#7cffb2; --warn:#ffd166; --bad:#ff3d3d;
+    --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+    --disp:"Space Grotesk",system-ui,-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--abyss);color:var(--txt);font-family:var(--disp);
+    overflow:hidden;position:fixed;inset:0;-webkit-font-smoothing:antialiased;
+  }
+  #scene{position:absolute;inset:0;width:100%;height:100%;z-index:0;cursor:grab}
+  #scene:active{cursor:grabbing}
+  .bg-grad{position:absolute;inset:0;z-index:1;pointer-events:none;
+    background:radial-gradient(120% 90% at 50% 8%,rgba(255,77,94,.06),transparent 55%),
+               radial-gradient(140% 120% at 50% 120%,rgba(255,30,86,.06),transparent 60%)}
+  .scan{position:absolute;inset:0;z-index:2;pointer-events:none;opacity:.5;
+    background:repeating-linear-gradient(0deg,transparent 0 3px,rgba(0,0,0,.18) 3px 4px)}
+
+  .topbar{position:absolute;top:0;left:0;right:0;z-index:10;
+    display:flex;align-items:center;justify-content:space-between;
+    padding:14px 22px;gap:16px;pointer-events:none}
+  .brand{display:flex;align-items:baseline;gap:12px;pointer-events:auto}
+  .brand .glyph{width:11px;height:11px;border-radius:50%;background:var(--accent);
+    box-shadow:0 0 14px var(--accent),0 0 28px var(--accent);align-self:center;
+    animation:beat 1.8s ease-in-out infinite}
+  @keyframes beat{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(.6);opacity:.5}}
+  .brand h1{font-size:18px;font-weight:700;letter-spacing:.14em}
+  .brand .sub{font-family:var(--mono);font-size:10.5px;letter-spacing:.22em;
+    color:var(--muted);text-transform:uppercase}
+  .status{display:flex;align-items:center;gap:18px;pointer-events:auto;
+    font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.1em}
+  .status .clock{color:var(--txt)}
+  .status .live{display:flex;align-items:center;gap:7px;color:var(--ok)}
+  .status .live .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);
+    box-shadow:0 0 10px var(--ok);animation:beat 1.4s infinite}
+  .status .live.err{color:var(--bad)} .status .live.err .dot{background:var(--bad);box-shadow:0 0 10px var(--bad)}
+
+  .panel{position:absolute;z-index:9;background:var(--panel);
+    border:1px solid var(--line);border-radius:14px;backdrop-filter:blur(14px);
+    -webkit-backdrop-filter:blur(14px);box-shadow:0 18px 60px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.04)}
+  .panel h2{font-family:var(--mono);font-size:10.5px;letter-spacing:.24em;color:var(--accent);
+    text-transform:uppercase;padding:13px 16px 10px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:8px}
+  .panel h2::before{content:"";width:5px;height:5px;background:var(--accent);border-radius:1px;
+    box-shadow:0 0 8px var(--accent)}
+
+  #left{top:74px;left:22px;width:288px}
+  #right{top:74px;right:22px;width:340px;display:flex;flex-direction:column;max-height:calc(100vh - 250px)}
+  #bottom{left:22px;right:22px;bottom:18px;height:158px;display:flex;gap:0}
+
+  .filters{padding:14px 16px;display:flex;flex-direction:column;gap:14px}
+  .kpis{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);
+    border-top:1px solid var(--line)}
+  .kpi{background:var(--panel-solid);padding:13px 15px}
+  .kpi .v{font-family:var(--mono);font-size:25px;font-weight:700;line-height:1;letter-spacing:-.01em}
+  .kpi .l{font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;color:var(--muted);
+    text-transform:uppercase;margin-top:7px}
+  .kpi.max .v{color:var(--bad)}
+
+  .toplist{padding:12px 16px;border-top:1px solid var(--line)}
+  .toplist .row{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;
+    color:var(--txt);padding:4px 0}
+  .toplist .row b{color:var(--accent)}
+  .src{padding:11px 16px;border-top:1px solid var(--line);font-family:var(--mono);font-size:9.5px;
+    color:var(--muted2);letter-spacing:.05em;line-height:1.7}
+  .src b{color:var(--muted)}
+
+  .evwrap{overflow-y:auto;flex:1}
+  .evwrap::-webkit-scrollbar{width:6px} .evwrap::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:3px}
+  .ev{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid rgba(255,255,255,.04);
+    cursor:pointer;transition:.15s}
+  .ev:hover{background:rgba(255,77,94,.06)}
+  .flag{flex:none;width:46px;height:46px;border-radius:11px;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;font-family:var(--mono);font-weight:700;
+    border:1px solid rgba(255,255,255,.12);background:rgba(255,77,94,.08);color:var(--accent);font-size:16px}
+  .ev .meta{min-width:0;flex:1}
+  .ev .place{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ev .det{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:3px;letter-spacing:.04em}
+  .ev .det .dim{color:var(--muted2)}
+
+  .chart{flex:1;display:flex;flex-direction:column;min-width:0}
+  .chart:first-child{border-right:1px solid var(--line)}
+  .chart h2{border-bottom:1px solid var(--line)}
+  .chart canvas{flex:1;width:100%;display:block}
+
+  .detail{position:fixed;left:50%;bottom:20px;transform:translate(-50%,16px);z-index:15;
+    width:min(440px,calc(100vw - 24px));background:var(--panel);border:1px solid var(--line-strong);
+    border-radius:16px;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+    box-shadow:0 24px 70px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.05);
+    padding:18px;opacity:0;pointer-events:none;transition:.28s cubic-bezier(.2,.7,.3,1)}
+  .detail.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+  .dClose{position:absolute;top:12px;right:12px;width:28px;height:28px;border-radius:8px;
+    background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--muted);
+    font-size:13px;cursor:pointer;transition:.15s}
+  .dClose:hover{color:var(--txt);background:rgba(255,255,255,.1)}
+  .dHead{display:flex;align-items:center;gap:14px;margin-bottom:14px}
+  .flagbox{flex:none;width:62px;height:62px;border-radius:14px;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;font-family:var(--mono);font-weight:700;
+    border:1px solid rgba(255,255,255,.14);background:rgba(255,77,94,.1);color:var(--accent)}
+  .flagbox .n{font-size:22px;line-height:1} .flagbox .u{font-size:9px;letter-spacing:.16em;opacity:.65;margin-top:3px}
+  .dTitle{min-width:0;flex:1;padding-right:24px}
+  .dTitle .place{font-size:15px;font-weight:600;line-height:1.25;word-break:break-all}
+  .dTitle .ago{font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:.06em;margin-top:5px}
+  .dRows{display:flex;flex-direction:column;gap:1px;background:var(--line);border-radius:10px;overflow:hidden}
+  .dRow{display:flex;justify-content:space-between;align-items:center;gap:12px;
+    background:var(--panel-solid);padding:10px 13px}
+  .dRow span{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+  .dRow b{font-family:var(--mono);font-size:11.5px;font-weight:500;color:var(--txt);text-align:right;word-break:break-all}
+  .dWarn{font-family:var(--mono);font-size:10px;color:var(--warn);margin-top:10px;line-height:1.6;
+    background:rgba(255,209,102,.08);border:1px solid rgba(255,209,102,.25);border-radius:8px;padding:9px 11px}
+  .dLink{display:block;text-align:center;margin-top:14px;padding:11px;border-radius:10px;
+    text-decoration:none;font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;color:var(--accent);
+    background:linear-gradient(180deg,rgba(255,77,94,.16),rgba(255,77,94,.05));
+    border:1px solid var(--line-strong);transition:.15s}
+  .dLink:hover{background:linear-gradient(180deg,rgba(255,77,94,.28),rgba(255,77,94,.1));color:#fff}
+
+  .guide-btn{pointer-events:auto;font-family:var(--mono);font-size:11px;letter-spacing:.12em;
+    color:var(--accent);background:rgba(255,77,94,.08);border:1px solid var(--line-strong);
+    border-radius:8px;padding:7px 13px;cursor:pointer;transition:.15s}
+  .guide-btn:hover{background:rgba(255,77,94,.2);color:#fff}
+  .overlay{position:fixed;inset:0;z-index:25;display:flex;align-items:center;justify-content:center;
+    padding:18px;background:rgba(3,5,10,.8);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+    opacity:0;pointer-events:none;transition:.3s}
+  .overlay.show{opacity:1;pointer-events:auto}
+  .tmodal{width:min(720px,100%);max-height:88vh;overflow-y:auto;background:var(--panel-solid);
+    border:1px solid var(--line-strong);border-radius:18px;box-shadow:0 30px 90px rgba(0,0,0,.7)}
+  .tmodal::-webkit-scrollbar{width:7px}.tmodal::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:4px}
+  .tmodal header{position:sticky;top:0;z-index:2;display:flex;align-items:center;justify-content:space-between;
+    padding:16px 20px;background:linear-gradient(180deg,var(--panel-solid),rgba(13,16,26,.7));
+    border-bottom:1px solid var(--line)}
+  .tmodal header h2{font-family:var(--mono);font-size:12.5px;letter-spacing:.18em;color:var(--accent)}
+  .tmodal header .dClose{position:relative;top:auto;right:auto}
+  .tsec{padding:22px 20px;border-bottom:1px solid var(--line)}
+  .tsec h3{font-size:14.5px;font-weight:600;margin-bottom:6px;letter-spacing:.01em}
+  .tsec .lead{font-size:12.5px;color:var(--muted);line-height:1.75;margin-bottom:10px}
+  .tsec .lead b{color:var(--txt)}
+  .termgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+  .termcard{background:#0f0a0d;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .termcard b{font-size:12.5px;color:var(--accent)} .termcard p{font-size:11px;color:var(--muted);margin-top:5px;line-height:1.6}
+  @media (max-width:920px){.termgrid{grid-template-columns:1fr}.tsec{padding:18px 16px}.guide-btn{padding:6px 11px}}
+
+  .loader{position:absolute;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;
+    background:var(--abyss);transition:opacity .6s;flex-direction:column;gap:18px}
+  .loader.hide{opacity:0;pointer-events:none}
+  .ring{width:54px;height:54px;border:2px solid var(--line);border-top-color:var(--accent);
+    border-radius:50%;animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .loader p{font-family:var(--mono);font-size:11px;letter-spacing:.2em;color:var(--muted)}
+
+  .sheet{position:static}
+  @media (max-width:920px){
+    body{position:fixed;inset:0;overflow:hidden}
+    #scene{position:fixed;top:0;left:0;width:100%;height:46vh;cursor:default}
+    .topbar{position:fixed;top:0;left:0;right:0;flex-direction:row;align-items:center;gap:10px;
+      padding:12px 16px 22px;background:linear-gradient(180deg,rgba(5,7,13,.92),rgba(5,7,13,0))}
+    .brand h1{font-size:16px} .brand .sub{display:none} .status{gap:12px}
+    .sheet{position:fixed;left:0;right:0;top:44vh;bottom:0;overflow-y:auto;z-index:9;
+      -webkit-overflow-scrolling:touch;padding:6px 12px 32px;border-top:1px solid var(--line);
+      background:linear-gradient(180deg,rgba(5,7,13,0),rgba(5,7,13,.55) 5%,var(--abyss) 15%)}
+    .sheet::before{content:"";position:sticky;top:0;display:block;width:40px;height:4px;
+      border-radius:3px;background:var(--line-strong);margin:4px auto 12px;z-index:2}
+    #left,#right,#bottom{position:relative;inset:auto;left:auto;right:auto;top:auto;bottom:auto;
+      width:auto;height:auto;max-height:none;margin:0 0 12px}
+    #bottom{flex-direction:column;height:auto}
+    .chart{height:170px}
+    .chart:first-child{border-right:none;border-bottom:1px solid var(--line)}
+    .detail{top:11vh;bottom:auto;transform:translate(-50%,-8px);z-index:21}
+    .detail.show{transform:translate(-50%,0)}
+  }
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div class="bg-grad"></div>
+<div class="scan"></div>
+
+<div class="topbar">
+  <div class="brand">
+    <span class="glyph"></span>
+    <h1>CYBERWATCH</h1>
+    <span class="sub">전 지구 실시간 사이버 위협 관측</span>
+  </div>
+  <div class="status">
+    <button class="guide-btn" id="guideBtn">용어 가이드</button>
+    <span class="clock" id="clock">--:--:-- UTC</span>
+    <span class="live" id="live"><span class="dot"></span><span id="liveTxt">연결 중</span></span>
+  </div>
+</div>
+
+<div class="sheet">
+<div class="panel" id="left">
+  <h2>관측 개요 · OVERVIEW</h2>
+  <div class="filters">
+    <div class="src" style="padding:0;border:none">
+      데이터는 20분 간격으로 자동 갱신됩니다. 지진처럼 초 단위 실시간은 아니지만, 실제 커뮤니티가 제보한 악성 인프라 데이터입니다.
+    </div>
+  </div>
+  <div class="kpis">
+    <div class="kpi"><div class="v" id="kCount">—</div><div class="l">관측 건수</div></div>
+    <div class="kpi max"><div class="v" id="kCountries">—</div><div class="l">발생 국가 수</div></div>
+  </div>
+  <div class="toplist" id="topCountries"></div>
+  <div class="src" id="src">
+    <b>출처</b> abuse.ch URLhaus (악성 URL 제보 DB)<br>
+    <b>지오로케이션</b> ip-api.com<br>
+    <b>갱신</b> <span id="upd">—</span>
+  </div>
+</div>
+
+<div class="panel" id="right">
+  <h2>최근 인시던트 · RECENT</h2>
+  <div class="evwrap" id="evList"></div>
+</div>
+
+<div class="panel" id="bottom">
+  <div class="chart">
+    <h2>국가별 분포 · BY COUNTRY</h2>
+    <canvas id="histC"></canvas>
+  </div>
+  <div class="chart">
+    <h2>악성코드 유형 · THREAT TYPE</h2>
+    <canvas id="tlC"></canvas>
+  </div>
+</div>
+</div>
+
+<div class="detail" id="detail">
+  <button class="dClose" id="dClose" aria-label="닫기">✕</button>
+  <div class="dHead">
+    <div class="flagbox" id="dFlagBox"><span class="n" id="dCC">—</span><span class="u">CC</span></div>
+    <div class="dTitle"><div class="place" id="dCountry">—</div><div class="ago" id="dAgo">—</div></div>
+  </div>
+  <div class="dRows">
+    <div class="dRow"><span>제보 시각 (UTC)</span><b id="dTime">—</b></div>
+    <div class="dRow"><span>악성코드 유형</span><b id="dThreat">—</b></div>
+    <div class="dRow"><span>태그</span><b id="dTags">—</b></div>
+    <div class="dRow"><span>IP</span><b id="dIp">—</b></div>
+    <div class="dRow"><span>URL (비활성화)</span><b id="dUrl">—</b></div>
+  </div>
+  <div class="dWarn">⚠️ 위 URL은 실제 악성 인프라입니다. 절대 브라우저에 직접 붙여넣어 접속하지 마세요. 아래 링크는 abuse.ch의 안전한 분석 리포트 페이지입니다.</div>
+  <a class="dLink" id="dLink" target="_blank" rel="noopener noreferrer">URLhaus 분석 리포트 열기 ↗</a>
+</div>
+
+<div class="overlay" id="guideOverlay">
+  <div class="tmodal">
+    <header>
+      <h2>용어 가이드 · TERMS</h2>
+      <button class="dClose" id="gClose" aria-label="닫기">✕</button>
+    </header>
+    <section class="tsec" style="border-bottom:none">
+      <p class="lead">이 화면의 점 하나하나는 <b>실제로 전 세계 보안 커뮤니티가 제보한 악성 인프라(IOC)</b>입니다. 지진처럼 매초 발생하진 않지만, 조작되거나 시뮬레이션된 데이터가 아닙니다.</p>
+      <div class="termgrid">
+        <div class="termcard"><b>IOC</b><p>Indicator of Compromise. 침해 지표 — 악성 IP, URL, 파일 해시 등 공격 흔적을 식별하는 정보.</p></div>
+        <div class="termcard"><b>C2 (Command & Control)</b><p>공격자가 감염된 기기를 원격 조종하는 서버. 감염 후 명령을 받거나 탈취 정보를 전송하는 통로.</p></div>
+        <div class="termcard"><b>봇넷 (Botnet)</b><p>악성코드에 감염돼 원격 조종당하는 기기들의 네트워크. DDoS·스팸·추가 감염에 동원됨.</p></div>
+        <div class="termcard"><b>Mozi</b><p>IoT 기기(공유기 등)를 노리는 P2P 봇넷 악성코드. 취약한 기본 비밀번호를 노려 확산.</p></div>
+        <div class="termcard"><b>Emotet / QakBot</b><p>이메일 첨부파일로 퍼지는 뱅킹 트로이목마 계열. 랜섬웨어 유포의 발판으로도 악용됨.</p></div>
+        <div class="termcard"><b>악성 URL 호스팅</b><p>공격자가 악성 파일을 내려받게 하려고 준비해둔 웹 주소. 클릭 시 감염 위험.</p></div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+let SCENE, CAMERA, RENDERER, GLOBE, MARKERS = [];
+let INCIDENTS = [];
+const clockEl = document.getElementById('clock');
+const liveEl = document.getElementById('live');
+const liveTxt = document.getElementById('liveTxt');
+
+function tickClock(){
+  const now = new Date();
+  clockEl.textContent = now.toISOString().substr(11,8) + ' UTC';
+}
+setInterval(tickClock, 1000); tickClock();
+
+function latLonToVec3(lat, lon, r){
+  const phi = (90 - lat) * Math.PI / 180;
+  const theta = (lon + 180) * Math.PI / 180;
+  return new THREE.Vector3(
+    -r * Math.sin(phi) * Math.cos(theta),
+    r * Math.cos(phi),
+    r * Math.sin(phi) * Math.sin(theta)
+  );
+}
+
+function initScene(){
+  const canvas = document.getElementById('scene');
+  SCENE = new THREE.Scene();
+  CAMERA = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 1000);
+  CAMERA.position.set(0, 0, 6.2);
+  RENDERER = new THREE.WebGLRenderer({canvas, antialias:true, alpha:true});
+  RENDERER.setSize(window.innerWidth, window.innerHeight);
+  RENDERER.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+  const globeGeo = new THREE.SphereGeometry(2, 48, 48);
+  const globeMat = new THREE.MeshBasicMaterial({color:0x1a2233, wireframe:true, transparent:true, opacity:0.35});
+  GLOBE = new THREE.Mesh(globeGeo, globeMat);
+  SCENE.add(GLOBE);
+
+  const glowGeo = new THREE.SphereGeometry(2.02, 48, 48);
+  const glowMat = new THREE.MeshBasicMaterial({color:0xff4d5e, transparent:true, opacity:0.04});
+  SCENE.add(new THREE.Mesh(glowGeo, glowMat));
+
+  const starGeo = new THREE.BufferGeometry();
+  const starCount = 800;
+  const starPos = new Float32Array(starCount*3);
+  for(let i=0;i<starCount;i++){
+    const r = 40 + Math.random()*60;
+    const theta = Math.random()*Math.PI*2, phi = Math.acos(2*Math.random()-1);
+    starPos[i*3] = r*Math.sin(phi)*Math.cos(theta);
+    starPos[i*3+1] = r*Math.sin(phi)*Math.sin(theta);
+    starPos[i*3+2] = r*Math.cos(phi);
+  }
+  starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+  const starMat = new THREE.PointsMaterial({color:0xffffff, size:0.5, transparent:true, opacity:0.6});
+  SCENE.add(new THREE.Points(starGeo, starMat));
+
+  let dragging = false, lastX = 0, lastY = 0, rotY = 0, rotX = 0.2;
+  canvas.addEventListener('pointerdown', e => { dragging = true; lastX = e.clientX; lastY = e.clientY; });
+  window.addEventListener('pointerup', () => dragging = false);
+  window.addEventListener('pointermove', e => {
+    if(!dragging) return;
+    rotY += (e.clientX - lastX) * 0.005;
+    rotX += (e.clientY - lastY) * 0.003;
+    rotX = Math.max(-1.2, Math.min(1.2, rotX));
+    lastX = e.clientX; lastY = e.clientY;
+  });
+
+  function animate(){
+    requestAnimationFrame(animate);
+    if(!dragging) rotY += 0.0009;
+    GLOBE.rotation.y = rotY; GLOBE.rotation.x = rotX;
+    MARKERS.forEach(m => { m.group.rotation.y = rotY; m.group.rotation.x = rotX; });
+    RENDERER.render(SCENE, CAMERA);
+  }
+  animate();
+
+  window.addEventListener('resize', () => {
+    CAMERA.aspect = window.innerWidth/window.innerHeight;
+    CAMERA.updateProjectionMatrix();
+    RENDERER.setSize(window.innerWidth, window.innerHeight);
+  });
+}
+
+function plotMarkers(incidents){
+  MARKERS.forEach(m => SCENE.remove(m.group));
+  MARKERS = [];
+  incidents.forEach(inc => {
+    const group = new THREE.Group();
+    const pos = latLonToVec3(inc.lat, inc.lon, 2.03);
+    const dotGeo = new THREE.SphereGeometry(0.02, 8, 8);
+    const dotMat = new THREE.MeshBasicMaterial({color:0xff4d5e});
+    const dot = new THREE.Mesh(dotGeo, dotMat);
+    dot.position.copy(pos);
+    group.add(dot);
+    SCENE.add(group);
+    MARKERS.push({group, inc});
+  });
+}
+
+function byteToAscii(){}
+
+function timeAgo(iso){
+  const t = new Date(iso.replace(' ', 'T') + 'Z');
+  const diffMin = Math.round((Date.now() - t.getTime()) / 60000);
+  if (diffMin < 60) return diffMin + '분 전';
+  const h = Math.round(diffMin/60);
+  if (h < 24) return h + '시간 전';
+  return Math.round(h/24) + '일 전';
+}
+
+function renderEventList(incidents){
+  const wrap = document.getElementById('evList');
+  wrap.innerHTML = incidents.slice(0, 60).map((inc, i) => `
+    <div class="ev" data-idx="${i}">
+      <div class="flag">${inc.countryCode || '??'}</div>
+      <div class="meta">
+        <div class="place">${inc.country} · ${inc.threat}</div>
+        <div class="det">${timeAgo(inc.dateadded)} <span class="dim">·</span> ${inc.tags || '-'}</div>
+      </div>
+    </div>
+  `).join('');
+  wrap.querySelectorAll('.ev').forEach(el => {
+    el.addEventListener('click', () => showDetail(incidents[parseInt(el.dataset.idx, 10)]));
+  });
+}
+
+function defang(url){
+  return url.replace(/^http/i, 'hxxp').replace(/\./g, '[.]');
+}
+
+function showDetail(inc){
+  document.getElementById('dCC').textContent = inc.countryCode || '??';
+  document.getElementById('dCountry').textContent = inc.country;
+  document.getElementById('dAgo').textContent = timeAgo(inc.dateadded) + ' 제보';
+  document.getElementById('dTime').textContent = inc.dateadded + ' UTC';
+  document.getElementById('dThreat').textContent = inc.threat;
+  document.getElementById('dTags').textContent = inc.tags || '-';
+  document.getElementById('dIp').textContent = inc.ip;
+  document.getElementById('dUrl').textContent = defang(inc.url);
+  document.getElementById('dLink').href = inc.urlhaus_link;
+  document.getElementById('detail').classList.add('show');
+}
+document.getElementById('dClose').addEventListener('click', () => document.getElementById('detail').classList.remove('show'));
+
+document.getElementById('guideBtn').addEventListener('click', () => document.getElementById('guideOverlay').classList.add('show'));
+document.getElementById('gClose').addEventListener('click', () => document.getElementById('guideOverlay').classList.remove('show'));
+
+function renderCharts(incidents){
+  const byCountry = {};
+  incidents.forEach(i => { byCountry[i.country] = (byCountry[i.country]||0) + 1; });
+  const topC = Object.entries(byCountry).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  document.getElementById('topCountries').innerHTML = topC.map(([c,n]) =>
+    `<div class="row"><span>${c}</span><b>${n}</b></div>`).join('');
+
+  const byThreat = {};
+  incidents.forEach(i => { byThreat[i.threat] = (byThreat[i.threat]||0) + 1; });
+
+  drawBarChart('histC', topC.map(([c,n])=>[c,n]));
+  drawBarChart('tlC', Object.entries(byThreat).sort((a,b)=>b[1]-a[1]).slice(0,6));
+}
+
+function drawBarChart(canvasId, data){
+  const canvas = document.getElementById(canvasId);
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr; canvas.height = rect.height * dpr;
+  ctx.scale(dpr, dpr);
+  const w = rect.width, h = rect.height;
+  ctx.clearRect(0,0,w,h);
+  if (!data.length) return;
+  const max = Math.max(...data.map(d=>d[1]));
+  const barW = w / data.length;
+  data.forEach(([label, val], i) => {
+    const barH = (val/max) * (h-30);
+    ctx.fillStyle = '#ff4d5e';
+    ctx.globalAlpha = 0.75;
+    ctx.fillRect(i*barW + barW*0.15, h - barH - 18, barW*0.7, barH);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#e8eef5';
+    ctx.font = '10px JetBrains Mono, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(String(val), i*barW + barW/2, h - barH - 22 < 10 ? 12 : h - barH - 22);
+    ctx.fillStyle = '#6b7a8d';
+    ctx.font = '9px JetBrains Mono, monospace';
+    const lbl = label.length > 8 ? label.slice(0,7)+'…' : label;
+    ctx.fillText(lbl, i*barW + barW/2, h - 5);
+  });
+}
+
+async function loadData(){
+  try{
+    const res = await fetch('./data/cyber_incidents.json', {cache:'no-store'});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const data = await res.json();
+    INCIDENTS = data.incidents || [];
+    document.getElementById('kCount').textContent = data.count ?? INCIDENTS.length;
+    const countries = new Set(INCIDENTS.map(i=>i.country));
+    document.getElementById('kCountries').textContent = countries.size;
+    document.getElementById('upd').textContent = data.generated_at || '—';
+    plotMarkers(INCIDENTS);
+    renderEventList(INCIDENTS);
+    renderCharts(INCIDENTS);
+    liveEl.classList.remove('err'); liveTxt.textContent = '실시간';
+    document.getElementById('loader').classList.add('hide');
+  }catch(e){
+    liveEl.classList.add('err'); liveTxt.textContent = '연결 실패';
+    document.getElementById('loader').classList.add('hide');
+    console.error(e);
+  }
+}
+
+initScene();
+loadData();
+setInterval(loadData, 5*60*1000);
+</script>
+
+<div class="loader" id="loader">
+  <div class="ring"></div>
+  <p>위협 데이터 동기화 중…</p>
+</div>
+
+</body>
+</html>
