@@ -394,12 +394,13 @@ function initScene(){
       if(focusTarget.active){
         rotY += (focusTarget.y - rotY) * 0.09;
         rotX += (focusTarget.x - rotX) * 0.09;
-      } else if(idle > 2.5){
-        // 완속 자동회전 + 드래그 관성 잔여분 감쇠 (SEISMOS와 동일 방식)
-        rotY += 0.0009;
+      } else {
+        // 관성: 손을 뗀 직후부터 매 프레임 감쇠(즉시 글라이드)
         velY *= 0.95; velX *= 0.95;
         rotY += velY;
         rotX = Math.max(-1.2, Math.min(1.2, rotX + velX));
+        // 관성이 거의 소진되도록 충분히 정지해 있었으면 완속 자동회전 재개
+        if(idle > 2.5) rotY += 0.0009;
       }
     }
     GLOBE.rotation.y = rotY; GLOBE.rotation.x = rotX;
