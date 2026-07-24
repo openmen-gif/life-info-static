@@ -364,32 +364,49 @@ function initScene(){
   SCENE.add(new THREE.Points(starGeo, starMat));
 
   let dragging = false, lastX = 0, lastY = 0, rotY = 0, rotX = 0.2;
-  canvas.addEventListener('pointerdown', e => { dragging = true; lastX = e.clientX; lastY = e.clientY; focusTarget.active = false; });
+  let velY = 0, velX = 0, idle = 0, elapsed = 0, camDist = 6.2;
+  canvas.addEventListener('pointerdown', e => { dragging = true; lastX = e.clientX; lastY = e.clientY; idle = 0; focusTarget.active = false; });
   window.addEventListener('pointerup', () => dragging = false);
   window.addEventListener('pointermove', e => {
     if(!dragging) return;
-    rotY += (e.clientX - lastX) * 0.005;
-    rotX += (e.clientY - lastY) * 0.003;
-    rotX = Math.max(-1.2, Math.min(1.2, rotX));
+    const dy_ = (e.clientX - lastX) * 0.005;
+    const dx_ = (e.clientY - lastY) * 0.003;
+    rotY += dy_;
+    rotX = Math.max(-1.2, Math.min(1.2, rotX + dx_));
+    velY = dy_; velX = dx_;
     lastX = e.clientX; lastY = e.clientY;
+    idle = 0;
   });
+  // 트랙패드 좌우 스와이프가 브라우저 뒤로/앞으로가기 제스처로 새는 것 방지(SEISMOS와 동일) — 휠은 확대/축소로 사용
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    camDist = Math.max(3.5, Math.min(14, camDist + e.deltaY * 0.006));
+    idle = 0;
+  }, {passive:false});
 
   function animate(){
     requestAnimationFrame(animate);
+    const dt = clock.getDelta();
+    elapsed += dt;
+    CAMERA.position.z += (camDist - CAMERA.position.z) * 0.08;
     if(!dragging){
+      idle += dt;
       if(focusTarget.active){
         rotY += (focusTarget.y - rotY) * 0.09;
         rotX += (focusTarget.x - rotX) * 0.09;
-      } else {
+      } else if(idle > 2.5){
+        // 완속 자동회전 + 드래그 관성 잔여분 감쇠 (SEISMOS와 동일 방식)
         rotY += 0.0009;
+        velY *= 0.95; velX *= 0.95;
+        rotY += velY;
+        rotX = Math.max(-1.2, Math.min(1.2, rotX + velX));
       }
     }
     GLOBE.rotation.y = rotY; GLOBE.rotation.x = rotX;
     MARKERS.forEach(m => { m.group.rotation.y = rotY; m.group.rotation.x = rotX; });
-    const el = clock.getElapsedTime();
     ringGrp.children.forEach(m => {
       const u = m.userData;
-      const t = ((el*0.55 + u.off) % 1.6);
+      const t = ((elapsed*0.55 + u.off) % 1.6);
       const s = u.base * (0.3 + t);
       m.scale.set(s, s, s);
       m.material.opacity = Math.max(0, 1 - t/1.6);
