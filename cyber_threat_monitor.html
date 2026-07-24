@@ -365,10 +365,19 @@ function initScene(){
 
   let dragging = false, lastX = 0, lastY = 0, rotY = 0, rotX = 0.2;
   let velY = 0, velX = 0, idle = 0, elapsed = 0, camDist = 6.2;
-  canvas.addEventListener('pointerdown', e => { dragging = true; lastX = e.clientX; lastY = e.clientY; idle = 0; focusTarget.active = false; });
-  window.addEventListener('pointerup', () => dragging = false);
+  let sx0 = 0, sy0 = 0, moved = false;
+  canvas.addEventListener('pointerdown', e => {
+    dragging = true; lastX = e.clientX; lastY = e.clientY;
+    sx0 = e.clientX; sy0 = e.clientY; moved = false;
+    idle = 0; focusTarget.active = false;
+  });
+  window.addEventListener('pointerup', e => {
+    if(dragging && !moved) pickAt(e.clientX, e.clientY);
+    dragging = false;
+  });
   window.addEventListener('pointermove', e => {
     if(!dragging) return;
+    if(Math.abs(e.clientX - sx0) > 6 || Math.abs(e.clientY - sy0) > 6) moved = true;
     const dy_ = (e.clientX - lastX) * 0.005;
     const dx_ = (e.clientY - lastY) * 0.003;
     rotY += dy_;
@@ -490,6 +499,27 @@ function renderEventList(incidents){
       showDetail(inc); focusOn(inc);
     });
   });
+}
+
+function pickAt(sx, sy){
+  // 지도(globe) 위 지점을 직접 클릭/터치하면 가장 가까운 인시던트를 선택 — SEISMOS pickAt과 동일 방식
+  if(!INCIDENTS.length) return;
+  const rect = document.getElementById('scene').getBoundingClientRect();
+  const cx = sx - rect.left, cy = sy - rect.top;
+  let best = null, bestD = Infinity;
+  const v = new THREE.Vector3();
+  for(const inc of INCIDENTS){
+    v.copy(latLonToVec3(inc.lat, inc.lon, 2.03));
+    GLOBE.localToWorld(v);
+    if(v.dot(CAMERA.position) <= 0) continue; // 카메라 반대편(지구 뒷면)은 제외
+    const p = v.clone().project(CAMERA);
+    if(p.z > 1) continue;
+    const px2 = (p.x*0.5+0.5) * rect.width, py2 = (-p.y*0.5+0.5) * rect.height;
+    const d = Math.hypot(px2-cx, py2-cy);
+    if(d < 20 && d < bestD){ bestD = d; best = inc; }
+  }
+  if(best){ showDetail(best); focusOn(best); }
+  else { document.getElementById('detail').classList.remove('show'); }
 }
 
 function focusOn(inc){
