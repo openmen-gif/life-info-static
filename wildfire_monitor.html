@@ -621,29 +621,57 @@ function mapGdacsFeature(f){
   };
 }
 
-async function loadData(){
+const GDACS_TIMEOUT_MS = 10_000;
+const WILDFIRE_CACHE_KEY = 'wildfire-monitor:last-successful-gdacs-v1';
+
+function renderData(data, updatedAt){
+  INCIDENTS = (data.features || [])
+    .filter(f => f.properties.eventtype === 'WF')
+    .map(mapGdacsFeature)
+    .sort((a,b) => new Date(b.dateadded) - new Date(a.dateadded));
+  document.getElementById('kCount').textContent = INCIDENTS.length;
+  const countries = new Set(INCIDENTS.map(i=>i.country || '미상'));
+  document.getElementById('kCountries').textContent = countries.size;
+  document.getElementById('upd').textContent = new Date(updatedAt).toISOString().slice(0,16).replace('T',' ') + ' UTC';
+  plotMarkers(INCIDENTS);
+  buildRings(INCIDENTS);
+  renderEventList(INCIDENTS);
+  renderCharts(INCIDENTS);
+}
+
+function readCachedData(){
   try{
-    const res = await fetch('https://www.gdacs.org/gdacsapi/api/events/geteventlist/EVENTS4APP', {cache:'no-store'});
+    const cached = JSON.parse(localStorage.getItem(WILDFIRE_CACHE_KEY) || 'null');
+    return cached && cached.data && Array.isArray(cached.data.features) ? cached : null;
+  }catch(_){ return null; }
+}
+
+async function loadData(){
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), GDACS_TIMEOUT_MS);
+  try{
+    const res = await fetch('https://www.gdacs.org/gdacsapi/api/events/geteventlist/EVENTS4APP', {
+      cache:'no-store', signal: controller.signal
+    });
     if(!res.ok) throw new Error('HTTP '+res.status);
     const data = await res.json();
-    INCIDENTS = (data.features || [])
-      .filter(f => f.properties.eventtype === 'WF')
-      .map(mapGdacsFeature)
-      .sort((a,b) => new Date(b.dateadded) - new Date(a.dateadded));
-    document.getElementById('kCount').textContent = INCIDENTS.length;
-    const countries = new Set(INCIDENTS.map(i=>i.country || '미상'));
-    document.getElementById('kCountries').textContent = countries.size;
-    document.getElementById('upd').textContent = new Date().toISOString().slice(0,16).replace('T',' ') + ' UTC';
-    plotMarkers(INCIDENTS);
-    buildRings(INCIDENTS);
-    renderEventList(INCIDENTS);
-    renderCharts(INCIDENTS);
+    const updatedAt = new Date().toISOString();
+    renderData(data, updatedAt);
+    localStorage.setItem(WILDFIRE_CACHE_KEY, JSON.stringify({updatedAt, data}));
     liveEl.classList.remove('err'); liveTxt.textContent = '실시간';
-    document.getElementById('loader').classList.add('hide');
   }catch(e){
-    liveEl.classList.add('err'); liveTxt.textContent = '연결 실패';
-    document.getElementById('loader').classList.add('hide');
+    const cached = readCachedData();
+    liveEl.classList.add('err');
+    if(cached){
+      renderData(cached.data, cached.updatedAt);
+      liveTxt.textContent = 'GDACS 지연 · 캐시';
+    }else{
+      liveTxt.textContent = 'GDACS 지연';
+    }
     console.error(e);
+  }finally{
+    clearTimeout(timeout);
+    document.getElementById('loader').classList.add('hide');
   }
 }
 
