@@ -621,29 +621,49 @@ function mapGdacsFeature(f){
   };
 }
 
+const TYPHOON_CACHE_KEY = 'typhoon-monitor:last-successful-sync-v1';
+
+function renderIncidents(incidents, updatedAt){
+  INCIDENTS = incidents.slice().sort((a,b) => new Date(b.dateadded) - new Date(a.dateadded));
+  document.getElementById('kCount').textContent = INCIDENTS.length;
+  const regions = new Set(INCIDENTS.map(i=>i.country || '해상'));
+  document.getElementById('kCountries').textContent = regions.size;
+  document.getElementById('upd').textContent = new Date(updatedAt).toISOString().slice(0,16).replace('T',' ') + ' UTC';
+  plotMarkers(INCIDENTS);
+  buildRings(INCIDENTS);
+  renderEventList(INCIDENTS);
+  renderCharts(INCIDENTS);
+}
+
+function readCachedData(){
+  try{
+    const cached = JSON.parse(localStorage.getItem(TYPHOON_CACHE_KEY) || 'null');
+    return cached && Array.isArray(cached.incidents) ? cached : null;
+  }catch(_){ return null; }
+}
+
 async function loadData(){
   try{
-    const res = await fetch('https://www.gdacs.org/gdacsapi/api/events/geteventlist/EVENTS4APP', {cache:'no-store'});
-    if(!res.ok) throw new Error('HTTP '+res.status);
-    const data = await res.json();
-    INCIDENTS = (data.features || [])
-      .filter(f => f.properties.eventtype === 'TC')
-      .map(mapGdacsFeature)
-      .sort((a,b) => new Date(b.dateadded) - new Date(a.dateadded));
-    document.getElementById('kCount').textContent = INCIDENTS.length;
-    const regions = new Set(INCIDENTS.map(i=>i.country || '해상'));
-    document.getElementById('kCountries').textContent = regions.size;
-    document.getElementById('upd').textContent = new Date().toISOString().slice(0,16).replace('T',' ') + ' UTC';
-    plotMarkers(INCIDENTS);
-    buildRings(INCIDENTS);
-    renderEventList(INCIDENTS);
-    renderCharts(INCIDENTS);
-    liveEl.classList.remove('err'); liveTxt.textContent = '실시간';
-    document.getElementById('loader').classList.add('hide');
+    const res = await fetch('data/gdacs_incidents.json', {cache:'no-store'});
+    if(!res.ok) throw new Error('snapshot HTTP '+res.status);
+    const snapshot = await res.json();
+    const incidents = snapshot.typhoon || [];
+    const updatedAt = snapshot.generated_at || new Date().toISOString();
+    renderIncidents(incidents, updatedAt);
+    localStorage.setItem(TYPHOON_CACHE_KEY, JSON.stringify({updatedAt, incidents}));
+    liveEl.classList.remove('err'); liveTxt.textContent = '동기화됨';
   }catch(e){
-    liveEl.classList.add('err'); liveTxt.textContent = '연결 실패';
-    document.getElementById('loader').classList.add('hide');
+    const cached = readCachedData();
+    liveEl.classList.add('err');
+    if(cached){
+      renderIncidents(cached.incidents, cached.updatedAt);
+      liveTxt.textContent = 'GDACS 지연 · 캐시';
+    }else{
+      liveTxt.textContent = 'GDACS 지연';
+    }
     console.error(e);
+  }finally{
+    document.getElementById('loader').classList.add('hide');
   }
 }
 

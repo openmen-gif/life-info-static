@@ -646,19 +646,30 @@ function readCachedData(){
   }catch(_){ return null; }
 }
 
+function snapshotToGdacsData(incidents, eventtype){
+  return {features: incidents.map(i => ({
+    geometry: {coordinates:[i.lon, i.lat]},
+    properties: {
+      eventtype, eventname:i.name, name:i.name, country:i.country,
+      fromdate:i.dateadded, datemodified:i.dateadded, alertlevel:i.tags,
+      severitydata:{severitytext:i.threat, severity:i.severity},
+      url:{report:i.reportUrl}
+    }
+  }))};
+}
+
 async function loadData(){
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), GDACS_TIMEOUT_MS);
   try{
-    const res = await fetch('https://www.gdacs.org/gdacsapi/api/events/geteventlist/EVENTS4APP', {
-      cache:'no-store', signal: controller.signal
-    });
-    if(!res.ok) throw new Error('HTTP '+res.status);
-    const data = await res.json();
-    const updatedAt = new Date().toISOString();
+    const res = await fetch('data/gdacs_incidents.json', {cache:'no-store', signal:controller.signal});
+    if(!res.ok) throw new Error('snapshot HTTP '+res.status);
+    const snapshot = await res.json();
+    const data = snapshotToGdacsData(snapshot.wildfire || [], 'WF');
+    const updatedAt = snapshot.generated_at || new Date().toISOString();
     renderData(data, updatedAt);
     localStorage.setItem(WILDFIRE_CACHE_KEY, JSON.stringify({updatedAt, data}));
-    liveEl.classList.remove('err'); liveTxt.textContent = '실시간';
+    liveEl.classList.remove('err'); liveTxt.textContent = '동기화됨';
   }catch(e){
     const cached = readCachedData();
     liveEl.classList.add('err');
