@@ -1,0 +1,35 @@
+name: Update Hazard Feeds (Volcano / Tsunami / Air Quality)
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # 한 소스가 죽어도 나머지 피드는 갱신되도록 단계를 분리하고 continue-on-error 를 쓴다
+      - name: Build volcano snapshot (Smithsonian GVP + USGS HANS)
+        continue-on-error: true
+        run: python scripts/build_volcano_feed.py
+      - name: Build tsunami snapshot (NOAA NTWC + PTWC)
+        continue-on-error: true
+        run: python scripts/build_tsunami_feed.py
+      - name: Build air quality snapshot (Open-Meteo)
+        continue-on-error: true
+        run: python scripts/build_airquality_feed.py
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/volcano_incidents.json data/tsunami_incidents.json data/airquality_incidents.json
+          git diff --cached --quiet || git commit -m "chore: update hazard feeds [skip ci]"
+          git push

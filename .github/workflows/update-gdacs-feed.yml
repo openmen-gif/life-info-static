@@ -16,7 +16,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Build wildfire and typhoon snapshot from GDACS RSS
+      - name: Build wildfire, typhoon and flood snapshot from GDACS RSS
         run: python scripts/build_gdacs_feed.py
       - name: Commit and push if changed
         run: |
