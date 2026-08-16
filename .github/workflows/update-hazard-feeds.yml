@@ -1,4 +1,4 @@
-name: Update Hazard Feeds (Volcano / Tsunami / Air Quality)
+name: Update Hazard Feeds (Volcano / Tsunami / Air Quality / Space Weather / Radiation)
 
 on:
   schedule:
@@ -26,10 +26,17 @@ jobs:
       - name: Build air quality snapshot (Open-Meteo)
         continue-on-error: true
         run: python scripts/build_airquality_feed.py
+      - name: Build space weather snapshot (NOAA SWPC)
+        continue-on-error: true
+        run: python scripts/build_spaceweather_feed.py
+      - name: Build radiation snapshot (Safecast)
+        continue-on-error: true
+        run: python scripts/build_radiation_feed.py
       - name: Commit and push if changed
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/volcano_incidents.json data/tsunami_incidents.json data/airquality_incidents.json
+          git add data/volcano_incidents.json data/tsunami_incidents.json data/airquality_incidents.json \
+                  data/spaceweather_incidents.json data/radiation_incidents.json
           git diff --cached --quiet || git commit -m "chore: update hazard feeds [skip ci]"
           git push

@@ -14,6 +14,12 @@ const MONITORS = [
     data: 'data/tsunami_incidents.json', key: 'tsunami', accent: '#8b7cff', unit: 'M' },
   { file: 'airquality_monitor.html', brand: 'AIR QUALITY WATCH',
     data: 'data/airquality_incidents.json', key: 'airquality', accent: '#a3e635', unit: 'AQI' },
+  { file: 'drought_monitor.html', brand: 'DROUGHT WATCH',
+    data: 'data/gdacs_incidents.json', key: 'drought', accent: '#c98b3a', unit: 'IDX' },
+  { file: 'spaceweather_monitor.html', brand: 'SPACE WEATHER',
+    data: 'data/spaceweather_incidents.json', key: 'spaceweather', accent: '#ff6ec7', unit: '%' },
+  { file: 'radiation_monitor.html', brand: 'RADIATION WATCH',
+    data: 'data/radiation_incidents.json', key: 'radiation', accent: '#ffd93d', unit: 'μSv/h' },
 ];
 
 const read = (file) => readFile(path.resolve(file), 'utf8');
@@ -88,4 +94,43 @@ test('air quality ranks by severity because every city shares one timestamp', as
   const page = await read('airquality_monitor.html');
 
   assert.match(page, /sort\(\(\(a,b\) => \(b\.severity\|\|0\) - \(a\.severity\|\|0\)\)\)/);
+});
+
+test('radiation badge shows the dose, not the scaled ring metric', async () => {
+  const page = await read('radiation_monitor.html');
+
+  // severity 는 μSv/h x100 이라 배지에 그대로 쓰면 0.11 이 11 로 보인다
+  assert.match(page, /\(inc\.dose \?\? 0\)\.toFixed\(2\)/);
+});
+
+test('radiation guide warns that sensor coverage is heavily skewed', async () => {
+  const page = await read('radiation_monitor.html');
+
+  // 점이 없다 = 방사선이 없다 로 읽히면 안 된다
+  assert.match(page, /관측 밀도 편중/);
+  assert.match(page, /IERNet/);
+});
+
+test('space weather colours by Kp so quiet days are not all amber', async () => {
+  const page = await read('spaceweather_monitor.html');
+
+  assert.match(page, /Kp 지수와 G등급/);
+  assert.match(page, /오로라대/);
+});
+
+test('drought keeps the full country list for the detail panel', async () => {
+  const page = await read('drought_monitor.html');
+
+  assert.match(page, /inc\.countries \|\| inc\.country/);
+});
+
+test('flood and drought read different keys from the shared GDACS snapshot', async () => {
+  const [flood, drought] = await Promise.all([
+    read('flood_monitor.html'), read('drought_monitor.html'),
+  ]);
+
+  assert.match(flood, /snapshot\.flood/);
+  assert.match(drought, /snapshot\.drought/);
+  assert.ok(!flood.includes('snapshot.drought'));
+  assert.ok(!drought.includes('snapshot.flood'));
 });

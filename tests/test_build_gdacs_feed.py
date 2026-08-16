@@ -85,5 +85,42 @@ class FloodFeedTests(unittest.TestCase):
                 self.assertRegex(feed[kind][0]['dateadded'], r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$')
 
 
+DROUGHT_RSS = b'''<?xml version="1.0"?>
+<rss xmlns:gdacs="http://www.gdacs.org" xmlns:georss="http://www.georss.org/georss"><channel>
+  <item><title>Drought in East Africa</title><link>https://example.test/dr</link><gdacs:eventtype>DR</gdacs:eventtype><gdacs:country>Ethiopia, Kenya, Somalia</gdacs:country><gdacs:fromdate>Wed, 21 May 2026 00:00:00 GMT</gdacs:fromdate><gdacs:alertlevel>Orange</gdacs:alertlevel><gdacs:severity unit="" value="598427">Medium impact for agricultural drought </gdacs:severity><georss:point>5.0 40.0</georss:point></item>
+  <item><title>Drought in Brazil</title><link>https://example.test/dr2</link><gdacs:eventtype>DR</gdacs:eventtype><gdacs:country>Brazil</gdacs:country><gdacs:fromdate>Wed, 21 May 2026 00:00:00 GMT</gdacs:fromdate><gdacs:alertlevel>Green</gdacs:alertlevel><gdacs:severity unit="" value="1123106">Minor impact for agricultural drought </gdacs:severity><georss:point>-10.0 -50.0</georss:point></item>
+</channel></rss>'''
+
+
+class DroughtFeedTests(unittest.TestCase):
+    def test_parse_feed_collects_droughts(self):
+        droughts = parse_feed(DROUGHT_RSS)['drought']
+
+        self.assertEqual(len(droughts), 2)
+        self.assertEqual(droughts[0]['severity'], 598427)
+
+    def test_impact_wording_is_korean(self):
+        droughts = {d['countries']: d for d in parse_feed(DROUGHT_RSS)['drought']}
+
+        self.assertEqual(droughts['Ethiopia, Kenya, Somalia']['threat'], '농업 가뭄 · 영향 보통')
+        self.assertEqual(droughts['Brazil']['threat'], '농업 가뭄 · 영향 경미')
+
+    def test_multi_country_events_are_shortened_for_grouping(self):
+        # 가뭄 한 건이 수십 개국에 걸쳐, 원문을 그대로 쓰면 목록·차트가 못 읽게 된다
+        droughts = {d['countries']: d for d in parse_feed(DROUGHT_RSS)['drought']}
+
+        self.assertEqual(droughts['Ethiopia, Kenya, Somalia']['country'], 'Ethiopia 외 2개국')
+        self.assertEqual(droughts['Brazil']['country'], 'Brazil')
+
+    def test_full_country_list_is_kept_for_the_detail_panel(self):
+        drought = parse_feed(DROUGHT_RSS)['drought'][0]
+
+        self.assertEqual(drought['countries'], 'Ethiopia, Kenya, Somalia')
+
+    def test_other_kinds_keep_the_raw_country_string(self):
+        # 국가 축약은 가뭄에만 적용해야 한다
+        self.assertEqual(parse_feed(RSS)['wildfire'][0]['country'], 'Exampleland')
+
+
 if __name__ == '__main__':
     unittest.main()

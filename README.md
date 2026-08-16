@@ -10,12 +10,19 @@
 | `typhoon_monitor.html` | TYPHOON WATCH — 태풍·열대저기압 | GDACS RSS (`TC`) | 15분 |
 | `wildfire_monitor.html` | WILDFIRE WATCH — 산불 | GDACS RSS (`WF`) | 15분 |
 | `flood_monitor.html` | FLOOD WATCH — 홍수 | GDACS RSS (`FL`) | 15분 |
+| `drought_monitor.html` | DROUGHT WATCH — 가뭄 | GDACS RSS (`DR`) | 15분 |
 | `volcano_monitor.html` | VOLCANO WATCH — 화산활동 | Smithsonian GVP 주간 보고서 + USGS HANS 경보등급 | 15분 (원본은 주 1회) |
 | `tsunami_monitor.html` | TSUNAMI WATCH — 쓰나미 경보 | NOAA NTWC(PAAQ) + PTWC(PHEB) | 15분 |
 | `airquality_monitor.html` | AIR QUALITY WATCH — 대기질·오존 | Open-Meteo Air Quality (Copernicus CAMS) | 15분 (원본은 1시간) |
+| `spaceweather_monitor.html` | SPACE WEATHER — 지자기 폭풍 | NOAA SWPC OVATION 오로라 + Kp 지수 | 15분 |
+| `radiation_monitor.html` | RADIATION WATCH — 환경 방사선 | Safecast 실시간 센서망 (LND7318) | 15분 |
 | `cyber_threat_monitor.html` | 사이버 위협 | abuse.ch URLhaus + ip-api 지오로케이션 | 20분 |
 
 모든 소스는 **API 키·회원가입이 필요 없습니다.**
+
+> **방사선 모니터 주의**: Safecast 는 시민이 자발적으로 설치한 관측망이라 일본·유럽·북미에
+> 센서가 몰려 있고 그 밖의 지역은 비어 있습니다. 지도에 점이 없는 것이 "방사선이 없다"는
+> 뜻이 아닙니다. 국내 공식 수치는 원자력안전위원회 IERNet 을 확인하세요.
 
 ## 구조
 
@@ -53,15 +60,18 @@ tests/              빌더 단위 테스트 + 모니터 HTML 계약 테스트
 
 ```bash
 # 피드 빌드 (저장소 루트에서)
-python scripts/build_gdacs_feed.py        # 산불 + 태풍 + 홍수
-python scripts/build_volcano_feed.py      # 화산
-python scripts/build_tsunami_feed.py      # 쓰나미
-python scripts/build_airquality_feed.py   # 대기질·오존
-python scripts/build_cyber_feed.py        # 사이버 위협
+python scripts/build_gdacs_feed.py         # 산불 + 태풍 + 홍수 + 가뭄
+python scripts/build_volcano_feed.py       # 화산
+python scripts/build_tsunami_feed.py       # 쓰나미
+python scripts/build_airquality_feed.py    # 대기질·오존
+python scripts/build_spaceweather_feed.py  # 지자기 폭풍
+python scripts/build_radiation_feed.py     # 환경 방사선
+python scripts/build_cyber_feed.py         # 사이버 위협
 
 # 테스트
 python -m unittest tests.test_build_gdacs_feed tests.test_build_volcano_feed \
-                   tests.test_build_tsunami_feed tests.test_build_airquality_feed
+                   tests.test_build_tsunami_feed tests.test_build_airquality_feed \
+                   tests.test_build_spaceweather_feed tests.test_build_radiation_feed
 node --test tests/*.test.mjs
 
 # 로컬 확인

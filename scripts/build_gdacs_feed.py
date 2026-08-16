@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a same-origin GDACS wildfire, tropical-cyclone and flood feed for GitHub Pages."""
+"""GDACS RSS 하나에서 산불·태풍·홍수·가뭄 4종 스냅샷을 만들어 GitHub Pages에 올린다."""
 import json
 import re
 import sys
@@ -46,6 +46,30 @@ def parse_impact(text):
     return " · ".join(parts) if parts else (text or "").strip(), deaths, displaced
 
 
+DROUGHT_IMPACT = {"minor": "영향 경미", "medium": "영향 보통", "high": "영향 큼", "severe": "영향 심각"}
+
+
+def korean_drought(text):
+    """GDACS 가뭄 문구('Minor impact for agricultural drought')를 한국어로 바꾼다."""
+    lowered = (text or "").lower()
+    for english, korean in DROUGHT_IMPACT.items():
+        if lowered.startswith(english):
+            return f"농업 가뭄 · {korean}"
+    return (text or "").strip() or "가뭄"
+
+
+def short_region(countries):
+    """다국가 묶음('Ethiopia, Kenya, Somalia')을 'Ethiopia 외 2개국'으로 줄인다.
+
+    가뭄은 여러 나라에 걸쳐 발생해 국가 문자열이 길다. 목록·차트는 짧은 이름으로
+    묶고, 전체 목록은 별도 필드로 남겨 상세 패널에서 보여준다.
+    """
+    names = [c.strip() for c in (countries or "").split(",") if c.strip()]
+    if not names:
+        return "미상"
+    return names[0] if len(names) == 1 else f"{names[0]} 외 {len(names) - 1}개국"
+
+
 def to_iso(raw):
     """GDACS의 RFC822 날짜를 접미사 Z 없는 UTC ISO로 바꾼다.
 
@@ -81,8 +105,8 @@ def coordinates_of(item):
 
 def parse_feed(xml_bytes):
     root = ET.fromstring(xml_bytes)
-    grouped = {"wildfire": [], "typhoon": [], "flood": []}
-    kinds = {"WF": "wildfire", "TC": "typhoon", "FL": "flood"}
+    grouped = {"wildfire": [], "typhoon": [], "flood": [], "drought": []}
+    kinds = {"WF": "wildfire", "TC": "typhoon", "FL": "flood", "DR": "drought"}
 
     for item in root.findall(".//item"):
         kind = kinds.get(text_of(item, "eventtype"))
@@ -102,7 +126,12 @@ def parse_feed(xml_bytes):
         population_text = (population.text or "").strip() if population is not None else ""
         # 홍수는 severity 가 항상 "Magnitude 0" 으로 와서 강도 비교가 불가능하다.
         # GDACS 가 홍수 피해를 담아 보내는 population(사망·이재민)을 강도 지표로 대신 쓴다.
+        countries = text_of(item, "country")
+        display_country = countries
         deaths = displaced = 0
+        if kind == "drought":
+            severity_text = korean_drought(severity_text)
+            display_country = short_region(countries)
         if kind == "flood":
             severity_text, deaths, displaced = parse_impact(population_text)
             severity_text = severity_text or "영향 규모 미상"
@@ -114,7 +143,8 @@ def parse_feed(xml_bytes):
             "lat": lat,
             "lon": lon,
             "name": name or "이름 미상",
-            "country": text_of(item, "country"),
+            "country": display_country,
+            "countries": countries,
             "dateadded": to_iso(text_of(item, "fromdate") or text_of(item, "datemodified")),
             "threat": severity_text or "—",
             "tags": text_of(item, "alertlevel") or "Green",
@@ -146,8 +176,7 @@ def main():
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT_PATH.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     print(
-        f"GDACS RSS 저장: wildfire={len(grouped['wildfire'])}, "
-        f"typhoon={len(grouped['typhoon'])}, flood={len(grouped['flood'])}",
+        "GDACS RSS 저장: " + ", ".join(f"{kind}={len(items)}" for kind, items in grouped.items()),
         file=sys.stderr,
     )
 
