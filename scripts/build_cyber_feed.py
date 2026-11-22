@@ -21,8 +21,12 @@ OUTPUT_PATH = "data/cyber_incidents.json"
 
 def fetch_urlhaus_rows():
     req = urllib.request.Request(URLHAUS_CSV, headers={"User-Agent": "life-info-static-cyber-feed/1.0"})
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        raw = resp.read().decode("utf-8", errors="replace")
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            raw = resp.read().decode("utf-8", errors="replace")
+    except Exception as e:
+        print(f"[WARN] URLhaus 수집 실패: {e}. 기존 데이터 유지 후 정상 종료.", file=sys.stderr)
+        return []
     lines = [ln for ln in raw.splitlines() if ln and not ln.startswith("#")]
     reader = csv.reader(lines)
     rows = []
@@ -69,6 +73,9 @@ def geolocate_batch(ips):
 
 def main():
     rows = fetch_urlhaus_rows()
+    if not rows:
+        print("[INFO] 수집된 데이터가 없어 기존 피드를 유지하고 정상 종료합니다.", file=sys.stderr)
+        return
     print(f"URLhaus 수집: {len(rows)}건", file=sys.stderr)
 
     ip_rows = []
